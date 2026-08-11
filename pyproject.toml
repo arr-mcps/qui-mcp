@@ -1,0 +1,22 @@
+[project]
+name = "qui-mcp"
+version = "0.0.0"
+description = "MCP server for qui's REST API"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["fastmcp>=2.0.0"]
+
+[project.scripts]
+qui-mcp = "qui_mcp:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.24.0"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = ["integration: hits a real qui instance (needs QUI_URL/QUI_API_KEY)"]
+addopts = "-m 'not integration'"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
