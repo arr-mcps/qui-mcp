@@ -1,40 +1,32 @@
-# qui-mcp Agent Guide
+# AGENTS.md — qui-mcp
 
-## Project
-
-This repository is a Python FastMCP wrapper for qui's JSON REST API. Keep the
-server in `qui_mcp.py` unless a change clearly requires a package layout.
-
-## Development
-
-- Use Python 3.11 or newer and `uv` for dependency management.
-- Run `uv sync` before tests when dependencies are missing.
-- Run `uv run pytest` for the offline suite.
-- Run `uv run pytest -m integration` only with an explicitly configured live qui instance.
-- Run `uv build` before release.
-- Keep the project version at `0.0.0` until the first release bump.
-
-## API wrapper conventions
-
-- Add or remove API coverage in `_ROUTES`; do not hand-register duplicate tools.
-- Tool names use the `qui_` prefix and snake_case.
-- Tool calls accept an `arguments` object. Put path variables at its top level,
-  query values under `params`, and JSON request data under `body`.
-- Preserve `X-API-Key` authentication and omit the header when `QUI_API_KEY` is unset.
-- Keep SSE and binary endpoints out of structured MCP tools.
-- Use read-only annotations for GET routes and destructive annotations for
-  deletes or operations that can remove/restore torrent data.
-- Keep `_req` as the single HTTP/error-handling path so error messages remain
-  consistent and MockTransport tests stay straightforward.
+MCP server exposing qui's JSON REST API as tools for monitoring and managing qBittorrent instances, torrents, automations, cross-seeding, RSS, backups, and related services. Uses FastMCP, `uv` for deps.
 
 ## Testing
+- Offline suite: `make test` (or `uv run pytest`)
+- Live integration (needs `QUI_URL`/`QUI_API_KEY`): `make test-integration`
 
-Tests must not make network requests by default. Add route coverage through the
-manifest parameterized test and add focused assertions for special query,
-encoding, authentication, error, or no-content behavior when needed.
+## Release workflow
+Always use the `make bump-*` targets to bump the version (`uv version --bump patch|minor|major`), which updates `pyproject.toml` and `uv.lock` together. Do NOT edit the version by hand.
 
-## Release
+- Bump: `make bump-patch` (or `bump-minor` / `bump-major`)
+- Commit message is **just the version**, e.g. `0.1.2` — nothing else.
+- Tag it `v<version>` (e.g. `v0.1.2`).
+- Push main and the tag:
+  ```
+  git push origin main
+  git push origin v<version>
+  ```
+- Deploy to the Proxmox host (root SSH key): pull the repo then reinstall the uv tool:
+  ```
+  ssh root@192.168.50.3 -- 'cd /root/qui-mcp && git fetch origin && git reset --hard origin/main'
+  ssh root@192.168.50.3 -- 'cd /root/qui-mcp && uv tool install --force .'
+  ```
+  The host runs it via `uv tool install` → `/root/.local/bin/qui-mcp` (not from the repo). There is no `/home/savagecore/Documents/christopfarr/mcp/qui-mcp` copy.
 
-The release workflow is tag driven. Do not tag or push from routine changes.
-The intended first release flow is `make bump-patch`, commit, tag `v0.0.1`, and
-push.
+## API wrapper conventions
+- Add or remove API coverage in `_ROUTES`; do not hand-register duplicate tools.
+- Tool names use the `qui_` prefix and snake_case. Tool calls take an `arguments` object: path variables at top level, query values under `params`, JSON request data under `body`.
+- Preserve `X-API-Key` authentication; omit the header when `QUI_API_KEY` is unset. Keep SSE/binary endpoints out of structured MCP tools.
+- Use read-only annotations for GET routes and destructive annotations for deletes/operations that can remove or restore torrent data.
+- Keep `_req` as the single HTTP/error-handling path so error messages stay consistent and MockTransport tests remain straightforward.
