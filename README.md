@@ -45,29 +45,53 @@ the key and sends no authentication header when it is unset.
 
 ## Tools
 
-The server registers one tool for every supported JSON endpoint. This includes
-instances, torrents, categories, tags, preferences, automations, RSS,
-backups, orphan scans, cross-seed, Torznab, ARR integrations, notifications,
-API-key management, logs, and application metadata.
+**12 resource-scoped tools**, each covering multiple qui JSON endpoints (214
+total) via an `operation` parameter: instances, torrents, categories, tags,
+preferences, automations, RSS, backups, orphan scans, cross-seed, Torznab,
+ARR integrations, notifications, API-key management, logs, and application
+metadata. Call a tool with `operation` set to one of its listed routes and an
+`arguments` object matching that route's parameters — the tool's own
+description (visible to your MCP client) lists every route and its method +
+path. This keeps the full REST surface available while costing a fraction of
+the context budget of registering all 214 routes as separate tools.
+
+| Tool | Routes |
+|---|---|
+| `qui_system` | 55 |
+| `qui_cross_seed` | 29 |
+| `qui_torrents` | 24 |
+| `qui_torznab` | 20 |
+| `qui_instances` | 17 |
+| `qui_dir_scan` | 15 |
+| `qui_rss` | 14 |
+| `qui_automations` | 12 |
+| `qui_backups` | 10 |
+| `qui_categories_tags` | 7 |
+| `qui_orphan_scan` | 7 |
+| `qui_torrent_creator` | 4 |
 
 Streaming endpoints and binary downloads are intentionally omitted because MCP
 tool results are structured JSON values. Session-creation endpoints
 (`/auth/setup`, `/auth/login`, and `/auth/logout`) are also omitted; use qui's
 web UI for those flows.
 
-Every tool accepts one optional `arguments` object:
+Every tool accepts `operation` (the route name, e.g. `qui_list_torrents`) plus
+one optional `arguments` object:
 
 ```json
 {
-  "instanceID": 1,
-  "hash": "torrent-info-hash",
-  "params": {"filter": "downloading"},
-  "body": {"value": "request payload"}
+  "operation": "qui_list_torrents",
+  "arguments": {
+    "instanceID": 1,
+    "hash": "torrent-info-hash",
+    "params": {"filter": "downloading"},
+    "body": {"value": "request payload"}
+  }
 }
 ```
 
-Path variables use their documented names. Query values belong in `params` and
-JSON request payloads belong in `body`.
+Path variables use their documented names. Query values belong in
+`arguments.params` and JSON request payloads belong in `arguments.body`.
 
 ## Development
 

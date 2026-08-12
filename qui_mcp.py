@@ -1,10 +1,16 @@
 """FastMCP server exposing qui's JSON REST API.
 
-The route manifest below intentionally mirrors qui's public API one endpoint at
-a time.  Each generated tool accepts an ``arguments`` object.  Path variables
-are supplied by name, query-string values go in ``params``, and request bodies
-go in ``body``.  Streaming and binary endpoints are excluded because MCP tool
-results are structured JSON values.
+The route manifest below still mirrors qui's public API one endpoint at a
+time (Streaming and binary endpoints are excluded because MCP tool results
+are structured JSON values), but the manifest is now an internal routing
+table rather than a 1:1 list of MCP tools. `_GROUPS` buckets the 214 routes
+into 12 resource-scoped *portmanteau* tools; each takes an `operation` enum
+(one of its group's route names) plus an ``arguments`` object. Path variables
+are supplied by name in ``arguments``, query-string values go in
+``arguments.params``, and request bodies go in ``arguments.body`` - exactly
+as before, just addressed through the group tool instead of directly. See
+AGENTS.md for the rationale (a 200+-tool server blows the MCP context budget
+on session start).
 """
 
 from __future__ import annotations
@@ -12,7 +18,7 @@ from __future__ import annotations
 import os
 import re
 import sys
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote
 
 import httpx
@@ -75,12 +81,6 @@ def _path(template: str, arguments: JSONObj) -> str:
         return quote(str(arguments[key]), safe="")
 
     return re.sub(r"\{([^}]+)\}", replace, template)
-
-
-def _is_destructive(method: str, path: str) -> bool:
-    return method == "DELETE" or path.endswith(('/restore', '/confirm')) or any(
-        marker in path for marker in ("/bulk-action", "/remove", "/delete", "/run/cancel")
-    )
 
 
 async def _invoke(spec: tuple[str, str], arguments: JSONObj | None) -> JSONVal:
@@ -332,33 +332,284 @@ _ROUTES: tuple[tuple[str, str, str], ...] = (
 )
 
 
+# Resource groups for portmanteau registration. Every _ROUTES name must
+# appear in exactly one group - see test_all_routes_grouped.
+_GROUPS: dict[str, tuple[str, ...]] = {
+    "qui_system": (
+        'qui_activate_license',
+        'qui_change_password',
+        'qui_check_setup',
+        'qui_create_api_key',
+        'qui_create_arr_instance',
+        'qui_create_client_api_key',
+        'qui_create_external_program',
+        'qui_create_filter_view',
+        'qui_create_notification_target',
+        'qui_create_tracker_customization',
+        'qui_delete_api_key',
+        'qui_delete_arr_instance',
+        'qui_delete_client_api_key',
+        'qui_delete_external_program',
+        'qui_delete_filter_view',
+        'qui_delete_license',
+        'qui_delete_notification_target',
+        'qui_delete_tracker_customization',
+        'qui_execute_external_program',
+        'qui_get_application_info',
+        'qui_get_arr_instance',
+        'qui_get_current_user',
+        'qui_get_dashboard_settings',
+        'qui_get_latest_version',
+        'qui_get_licensed_status',
+        'qui_get_log_exclusions',
+        'qui_get_log_settings',
+        'qui_get_tracker_icons',
+        'qui_get_version',
+        'qui_list_api_keys',
+        'qui_list_arr_instances',
+        'qui_list_client_api_keys',
+        'qui_list_custom_themes',
+        'qui_list_external_programs',
+        'qui_list_filter_views',
+        'qui_list_licenses',
+        'qui_list_log_files',
+        'qui_list_notification_events',
+        'qui_list_notification_targets',
+        'qui_list_tracker_customizations',
+        'qui_refresh_licenses',
+        'qui_resolve_arr',
+        'qui_test_arr_connection',
+        'qui_test_arr_instance',
+        'qui_test_notification_target',
+        'qui_update_arr_instance',
+        'qui_update_dashboard_settings',
+        'qui_update_external_program',
+        'qui_update_filter_view',
+        'qui_update_log_exclusions',
+        'qui_update_log_settings',
+        'qui_update_notification_target',
+        'qui_update_tracker_customization',
+        'qui_validate_license',
+        'qui_validate_session',
+    ),
+    "qui_cross_seed": (
+        'qui_add_cross_seed_blocklist_entry',
+        'qui_analyze_cross_seed_torrent',
+        'qui_apply_cross_seed_search',
+        'qui_apply_cross_seed_season_pack',
+        'qui_cancel_cross_seed_automation',
+        'qui_cancel_cross_seed_search',
+        'qui_check_cross_seed_season_pack',
+        'qui_cross_seed_apply',
+        'qui_cross_seed_webhook_check',
+        'qui_delete_cross_seed_blocklist_entry',
+        'qui_get_cross_seed_async_status',
+        'qui_get_cross_seed_completion',
+        'qui_get_cross_seed_local_matches',
+        'qui_get_cross_seed_search_settings',
+        'qui_get_cross_seed_search_status',
+        'qui_get_cross_seed_settings',
+        'qui_get_cross_seed_status',
+        'qui_get_instance_cross_seed_status',
+        'qui_list_cross_seed_blocklist',
+        'qui_list_cross_seed_runs',
+        'qui_list_cross_seed_search_runs',
+        'qui_list_cross_seed_season_pack_runs',
+        'qui_patch_cross_seed_search_settings',
+        'qui_patch_cross_seed_settings',
+        'qui_run_cross_seed_automation',
+        'qui_search_cross_seed_torrent',
+        'qui_start_cross_seed_search',
+        'qui_update_cross_seed_completion',
+        'qui_update_cross_seed_settings',
+    ),
+    "qui_torrents": (
+        'qui_add_peers',
+        'qui_add_torrent',
+        'qui_add_torrent_trackers',
+        'qui_ban_peers',
+        'qui_check_duplicate_torrents',
+        'qui_edit_torrent_tracker',
+        'qui_get_reannounce_activity',
+        'qui_get_reannounce_candidates',
+        'qui_get_torrent_field',
+        'qui_get_torrent_file_mediainfo',
+        'qui_get_torrent_files',
+        'qui_get_torrent_peers',
+        'qui_get_torrent_pieces',
+        'qui_get_torrent_properties',
+        'qui_get_torrent_trackers',
+        'qui_get_torrent_webseeds',
+        'qui_list_cross_instance_torrents',
+        'qui_list_torrents',
+        'qui_remove_torrent_trackers',
+        'qui_rename_torrent',
+        'qui_rename_torrent_file',
+        'qui_rename_torrent_folder',
+        'qui_set_torrent_file_priority',
+        'qui_torrent_bulk_action',
+    ),
+    "qui_torznab": (
+        'qui_create_torznab_indexer',
+        'qui_delete_torznab_indexer',
+        'qui_discover_torznab_indexers',
+        'qui_get_torznab_activity',
+        'qui_get_torznab_all_health',
+        'qui_get_torznab_indexer',
+        'qui_get_torznab_indexer_errors',
+        'qui_get_torznab_indexer_health',
+        'qui_get_torznab_indexer_stats',
+        'qui_get_torznab_search_cache',
+        'qui_get_torznab_search_history',
+        'qui_get_torznab_tracker_domains',
+        'qui_list_recent_torznab_searches',
+        'qui_list_torznab_indexers',
+        'qui_search_torznab',
+        'qui_search_torznab_cross_seed',
+        'qui_sync_torznab_indexer_caps',
+        'qui_test_torznab_indexer',
+        'qui_update_torznab_indexer',
+        'qui_update_torznab_search_cache_settings',
+    ),
+    "qui_instances": (
+        'qui_create_instance',
+        'qui_delete_instance',
+        'qui_get_active_trackers',
+        'qui_get_alternative_speed_limits',
+        'qui_get_directory_content',
+        'qui_get_instance_app_info',
+        'qui_get_instance_capabilities',
+        'qui_get_instance_mediainfo',
+        'qui_get_instance_transfer_info',
+        'qui_get_preferences',
+        'qui_list_instances',
+        'qui_test_instance',
+        'qui_toggle_alternative_speed_limits',
+        'qui_update_instance',
+        'qui_update_instance_order',
+        'qui_update_instance_status',
+        'qui_update_preferences',
+    ),
+    "qui_dir_scan": (
+        'qui_cancel_directory_scan',
+        'qui_create_scan_directory',
+        'qui_delete_scan_directory',
+        'qui_get_dir_scan_settings',
+        'qui_get_scan_directory',
+        'qui_get_scan_directory_status',
+        'qui_list_scan_directories',
+        'qui_list_scan_directory_files',
+        'qui_list_scan_directory_runs',
+        'qui_list_scan_run_injections',
+        'qui_requeue_scan_directory_no_match',
+        'qui_reset_scan_directory_files',
+        'qui_scan_directory',
+        'qui_update_dir_scan_settings',
+        'qui_update_scan_directory',
+    ),
+    "qui_rss": (
+        'qui_add_rss_feed',
+        'qui_add_rss_folder',
+        'qui_get_rss_items',
+        'qui_get_rss_rules',
+        'qui_mark_rss_article_read',
+        'qui_move_rss_item',
+        'qui_preview_rss_rule_matches',
+        'qui_refresh_rss_item',
+        'qui_remove_rss_item',
+        'qui_remove_rss_rule',
+        'qui_rename_rss_rule',
+        'qui_reprocess_rss_rules',
+        'qui_set_rss_feed_url',
+        'qui_set_rss_rule',
+    ),
+    "qui_automations": (
+        'qui_apply_automations',
+        'qui_create_automation',
+        'qui_delete_automation',
+        'qui_delete_automation_activity',
+        'qui_dry_run_automations',
+        'qui_get_automation_activity_run',
+        'qui_list_automation_activity',
+        'qui_list_automations',
+        'qui_preview_automation_delete',
+        'qui_reorder_automations',
+        'qui_update_automation',
+        'qui_validate_automation_regex',
+    ),
+    "qui_backups": (
+        'qui_delete_all_backup_runs',
+        'qui_delete_backup_run',
+        'qui_execute_backup_restore',
+        'qui_get_backup_manifest',
+        'qui_get_backup_settings',
+        'qui_import_backup_manifest',
+        'qui_list_backup_runs',
+        'qui_preview_backup_restore',
+        'qui_trigger_backup',
+        'qui_update_backup_settings',
+    ),
+    "qui_categories_tags": (
+        'qui_create_category',
+        'qui_create_tags',
+        'qui_delete_tags',
+        'qui_edit_category',
+        'qui_get_categories',
+        'qui_get_tags',
+        'qui_remove_categories',
+    ),
+    "qui_orphan_scan": (
+        'qui_cancel_orphan_scan',
+        'qui_confirm_orphan_deletion',
+        'qui_get_orphan_scan_run',
+        'qui_get_orphan_scan_settings',
+        'qui_list_orphan_scan_runs',
+        'qui_trigger_orphan_scan',
+        'qui_update_orphan_scan_settings',
+    ),
+    "qui_torrent_creator": (
+        'qui_create_torrent',
+        'qui_delete_torrent_creation_task',
+        'qui_get_active_torrent_creation_count',
+        'qui_get_torrent_creation_status',
+    ),
+}
+
+
+def _register_group(group: str, names: tuple[str, ...], spec_of: dict[str, tuple[str, str]]) -> None:
+    """Register one dispatching tool that fans out to every route named in
+    `names`, calling the same `_invoke` each individual tool used to call."""
+    specs = {n: spec_of[n] for n in names}
+
+    async def dispatch(operation: str, arguments: JSONObj | None = None) -> JSONVal:
+        spec = specs.get(operation)
+        if spec is None:
+            raise ToolError(f"Unknown operation {operation!r} for {group}. Valid: {', '.join(specs)}")
+        return await _invoke(spec, arguments)
+
+    dispatch.__annotations__["operation"] = Literal[names]
+    ann = READ_ONLY if all(method == "GET" for method, _ in specs.values()) else None
+    description = (
+        f"{group.replace('_', ' ')} operations on qui. Pass `operation` and an `arguments` "
+        "object; path variables go directly in arguments, query values in arguments.params, "
+        "and a JSON request body in arguments.body.\n\n"
+        + "\n".join(f"- {n}: {m} {p}" for n, (m, p) in sorted(specs.items()))
+    )
+    kwargs: dict[str, Any] = {"name": group, "description": description}
+    if ann is not None:
+        kwargs["annotations"] = ann
+    mcp.tool(**kwargs)(dispatch)
+
+
 def _register_tools() -> None:
     seen: set[str] = set()
-    for name, method, path in _ROUTES:
+    for name, _method, _path in _ROUTES:
         if name in seen:
             raise RuntimeError(f"duplicate MCP tool name: {name}")
         seen.add(name)
-        annotation = READ_ONLY if method == "GET" else DESTRUCTIVE if _is_destructive(method, path) else None
-        description = (
-            f"Call qui's {method} {path} endpoint. "
-            "Pass path variables directly in arguments, query values in arguments.params, "
-            "and a JSON request body in arguments.body."
-        )
-
-        def make_tool(spec: tuple[str, str]):
-            async def tool(arguments: JSONObj | None = None) -> JSONVal:
-                return await _invoke(spec, arguments)
-
-            return tool
-
-        tool = make_tool((method, path))
-
-        tool.__name__ = name
-        tool.__doc__ = description
-        kwargs = {"name": name, "description": description}
-        if annotation is not None:
-            kwargs["annotations"] = annotation
-        mcp.tool(**kwargs)(tool)
+    spec_of = {name: (method, path) for name, method, path in _ROUTES}
+    for group, names in _GROUPS.items():
+        _register_group(group, names, spec_of)
 
 
 _register_tools()

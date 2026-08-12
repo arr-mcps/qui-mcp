@@ -39,9 +39,15 @@ async def server(recorder: Recorder, monkeypatch: pytest.MonkeyPatch):
     await client.aclose()
 
 
+_OP_GROUP = {name: group for group, names in qui_mcp._GROUPS.items() for name in names}
+
+
 async def call(server, name: str, **arguments):
+    """Call `name` (a route name) through the portmanteau group tool that now
+    hosts it, so every existing per-route test keeps working unmodified
+    aside from this helper."""
     async with Client(server) as client:
-        return await client.call_tool(name, arguments)
+        return await client.call_tool(_OP_GROUP[name], {"operation": name, **arguments})
 
 
 @pytest.mark.parametrize("name,method,path", qui_mcp._ROUTES)
@@ -120,3 +126,26 @@ def test_main_requires_qui_url(monkeypatch):
     monkeypatch.delenv("QUI_URL", raising=False)
     with pytest.raises(SystemExit):
         qui_mcp.main()
+
+
+def test_all_routes_grouped():
+    """Every route must land in exactly one portmanteau group - this is the
+    safety net for the group-tool consolidation."""
+    route_names = [name for name, _method, _path in qui_mcp._ROUTES]
+    grouped_names = [n for names in qui_mcp._GROUPS.values() for n in names]
+    assert sorted(grouped_names) == sorted(route_names)
+    assert len(grouped_names) == len(set(grouped_names))
+
+
+async def test_group_tools_are_the_only_registered_tools(server):
+    async with Client(server) as c:
+        tools = await c.list_tools()
+    assert {t.name for t in tools} == set(qui_mcp._GROUPS)
+
+
+async def test_unknown_operation_rejected_by_schema(server):
+    # The Literal[...] enum on `operation` means an invalid value never
+    # reaches _register_group's dispatch body - pydantic rejects it first.
+    with pytest.raises(ToolError, match="validation error"):
+        async with Client(server) as c:
+            await c.call_tool("qui_categories_tags", {"operation": "not_a_real_route"})
