@@ -1,6 +1,6 @@
 # qui-mcp
 
-Part of the [arr-mcps](https://github.com/SavageCore/arr-mcps) collection.
+Part of the [arr-mcps](https://github.com/arr-mcps/arr-mcps) collection.
 MCP server exposing [qui](https://github.com/autobrr/qui)'s JSON REST API as
 tools for monitoring and managing qBittorrent instances, torrents,
 automations, cross-seeding, RSS, backups, and related services.
